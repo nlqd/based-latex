@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""
+tex-add — Cargo-style package manager wrapper for TeX Live / TinyTeX.
+
+Commands:
+  search <terms...>           Search tlmgr by package name AND filename.
+                              Bare names work: `tex-add search siunitx tikz-cd`.
+                              File-like terms (foo.sty) are searched as files.
+  add <pkgs...>               Install packages and record them in
+                              tex-packages.toml.
+  diagnose [LOG]              Parse a LaTeX log, find missing files/packages,
+                              print suggested install commands. Exits 1 if
+                              anything is missing. Use as $failure_cmd in
+                              .latexmkrc to get auto-suggestions on failure.
+  missing [LOG]               Like diagnose, but actually run the install
+                              after a confirmation prompt.
+  restore                     Install everything declared in tex-packages.toml.
+
+Default log path: build/main.log (override by passing a path).
+"""
+from __future__ import annotations
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+try:
+    import tomllib  # py 3.11+
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore
+
+MANIFEST = Path("tex-packages.toml")
+DEFAULT_LOG = Path("build/main.log")
+
+# --- terminal colors -------------------------------------------------------
+class C:
+    R = "\033[31m"; G = "\033[32m"; Y = "\033[33m"
+    B = "\033[34m"; DIM = "\033[2m"; BOLD = "\033[1m"; END = "\033[0m"
+    @classmethod
+    def disable(cls):
+        for k in list(cls.__dict__):
+            if k.isupper(): setattr(cls, k, "")
+
+if not sys.stdout.isatty():
+    C.disable()
+
+def info(msg):  print(f"{C.B}info{C.END}  {msg}")
+def warn(msg):  print(f"{C.Y}warn{C.END}  {msg}")
+def err(msg):   print(f"{C.R}error{C.END} {msg}", file=sys.stderr)
+def ok(msg):    print(f"{C.G}ok{C.END}    {msg}")
+
+# --- tlmgr helpers ---------------------------------------------------------
+FILE_EXTS = (".sty", ".cls", ".tex", ".ldf", ".fd", ".def", ".cfg", ".tfm",
+             ".otf", ".ttf", ".map", ".enc")
+
+def run(cmd):
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+def looks_like_file(term: str) -> bool:
+    return term.lower().endswith(FILE_EXTS)
+
+def search_one(term: str) -> set[str]:
+    """Search tlmgr by *both* package name and file name. Return matching pkg names."""
+    found: set[str] = set()
+
+    # tlmgr file search: match the basename anywhere in path; '/' prefix anchors
+    # to the filename component, which is what we usually want.
+    if looks_like_file(term):
+        anchor = f"/{term}"
+    else:
+        anchor = term  # let tlmgr regex it; we also do name search below
+
+    r_file = run(["tlmgr", "search", "--global", "--file", anchor])
+    cur_pkg: str | None = None
+    for line in r_file.stdout.splitlines():
+        m = re.match(r"^([A-Za-z0-9][\w\-\+\.]*):\s*$", line)
+        if m:
+            cur_pkg = m.group(1)
+            found.add(cur_pkg)
+
+    # Skip name search for things that are clearly filenames.
+    if not looks_like_file(term):
+        r_name = run(["tlmgr", "search", "--global", term])
+        for line in r_name.stdout.splitlines():
+            m = re.match(r"^(\S+) - ", line)
+            if m:
+                found.add(m.group(1))
+
+    return found
+
+def search(terms: list[str]) -> dict[str, set[str]]:
+    """Return {term: {pkg, pkg, ...}} for each query term."""
+    return {t: search_one(t) for t in terms}
+
+# --- log parsing -----------------------------------------------------------
+# Patterns that indicate a missing file. The first capture group is the file.
+MISSING_PATTERNS = [
+    re.compile(r"! LaTeX Error: File `([^']+)' not found"),
+    re.compile(r"! I can't find file `([^']+)'"),
+    re.compile(r"! Package .* Error: File `([^']+)' not found"),
+    re.compile(r"! pdfTeX error: .* could not find file `([^']+)'"),
+    re.compile(r"! Font \\[^=]+=([^ ]+) not loadable"),
+    re.compile(r"! LaTeX Error: Environment .* undefined"),  # weaker signal
+    re.compile(r"Package .* Error: Unable to load picture file `([^']+)'"),
+    re.compile(r"! Class ([^ ]+) Error: .* not found"),
+]
+
+# \usepackage{foo} doesn't *itself* error; the missing .sty does. But we also
+# match it as a fallback for when logs are truncated.
+USEPACKAGE_RE = re.compile(r"\\usepackage(?:\[[^\]]*\])?\{([^}]+)\}")
+
+def parse_log(path: Path) -> list[str]:
+    """Return a deduplicated list of missing files mentioned in the log."""
+    if not path.exists():
+        err(f"log not found: {path}")
+        sys.exit(2)
+
+    text = path.read_text(errors="replace")
+    missing: list[str] = []
+    for pat in MISSING_PATTERNS:
+        for m in pat.finditer(text):
+            if m.groups():
+                f = m.group(1).strip()
+                # Normalize: add .sty if no extension and looks like a package
+                if "." not in f and not f.startswith("/"):
+                    f = f + ".sty"
+                if f not in missing:
+                    missing.append(f)
+    return missing
+
+# --- manifest --------------------------------------------------------------
+def load_manifest() -> dict:
+    if not MANIFEST.exists():
+        return {"packages": {}}
+    with MANIFEST.open("rb") as f:
+        return tomllib.load(f)
+
+def write_manifest_entries(pkgs: list[str]):
+    """Append packages to the manifest if not already present. Plain-text edit
+    so we preserve user comments and ordering."""
+    if not MANIFEST.exists():
+        MANIFEST.write_text("[packages]\n")
+    current = MANIFEST.read_text()
+    existing = set(re.findall(r"^([A-Za-z0-9][\w\-\+\.]*)\s*=", current, re.M))
+    new = [p for p in pkgs if p not in existing]
+    if not new:
+        return
+    if not current.endswith("\n"):
+        current += "\n"
+    current += "\n".join(f'{p} = "*"' for p in new) + "\n"
+    MANIFEST.write_text(current)
+
+# --- subcommands -----------------------------------------------------------
+def cmd_search(args):
+    results = search(args.terms)
+    any_hit = False
+    for term, pkgs in results.items():
+        if pkgs:
+            any_hit = True
+            print(f"{C.BOLD}{term}{C.END} → {', '.join(sorted(pkgs))}")
+        else:
+            print(f"{C.BOLD}{term}{C.END} {C.DIM}(no match){C.END}")
+    return 0 if any_hit else 1
+
+def cmd_add(args):
+    r = subprocess.run(["tlmgr", "install", *args.pkgs])
+    if r.returncode != 0:
+        err("tlmgr install failed")
+        return r.returncode
+    write_manifest_entries(args.pkgs)
+    ok(f"installed and recorded: {', '.join(args.pkgs)}")
+    return 0
+
+def cmd_diagnose(args, *, do_install: bool = False):
+    log = Path(args.log) if args.log else DEFAULT_LOG
+    missing = parse_log(log)
+    if not missing:
+        ok("no missing files detected")
+        return 0
+
+    warn(f"build references {len(missing)} missing file(s):")
+    for f in missing:
+        print(f"  - {f}")
+
+    # Resolve each missing file to a package via tlmgr.
+    pkgs: set[str] = set()
+    for f in missing:
+        pkgs |= search_one(f)
+
+    if not pkgs:
+        err("no tlmgr packages found for the missing files")
+        err("(try `tex-add search <name>` manually, or check the log)")
+        return 1
+
+    cmd = f"tex-add add {' '.join(sorted(pkgs))}"
+    print()
+    print(f"{C.G}suggested:{C.END} {C.BOLD}{cmd}{C.END}")
+
+    if do_install:
+        ans = input(f"\nrun this now? [y/N] ").strip().lower()
+        if ans == "y":
+            return cmd_add(argparse.Namespace(pkgs=sorted(pkgs)))
+    return 1  # nonzero so $failure_cmd-style callers know there was work to do
+
+def cmd_missing(args):
+    return cmd_diagnose(args, do_install=True)
+
+def cmd_restore(args):
+    m = load_manifest()
+    pkgs = list(m.get("packages", {}).keys())
+    if not pkgs:
+        warn("no packages declared in tex-packages.toml")
+        return 0
+    info(f"installing {len(pkgs)} package(s) from manifest")
+    r = subprocess.run(["tlmgr", "install", *pkgs])
+    return r.returncode
+
+# --- entry -----------------------------------------------------------------
+def main():
+    p = argparse.ArgumentParser(prog="tex-add", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sp = sub.add_parser("search", help="search tlmgr by name and file")
+    sp.add_argument("terms", nargs="+")
+    sp.set_defaults(func=cmd_search)
+
+    sp = sub.add_parser("add", help="install + record in manifest")
+    sp.add_argument("pkgs", nargs="+")
+    sp.set_defaults(func=cmd_add)
+
+    sp = sub.add_parser("diagnose", help="parse a log and suggest installs")
+    sp.add_argument("log", nargs="?")
+    sp.set_defaults(func=cmd_diagnose)
+
+    sp = sub.add_parser("missing", help="diagnose + install (with prompt)")
+    sp.add_argument("log", nargs="?")
+    sp.set_defaults(func=cmd_missing)
+
+    sp = sub.add_parser("restore", help="install everything in the manifest")
+    sp.set_defaults(func=cmd_restore)
+
+    args = p.parse_args()
+    sys.exit(args.func(args))
+
+if __name__ == "__main__":
+    main()
