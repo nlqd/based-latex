@@ -1,0 +1,24 @@
+# Declared package dependencies for this paper.
+# Install everything with:  ./bin/t restore
+# Add a new package with:   ./bin/t add <name>
+#
+# All entries use "*" — there's no real version pinning yet (tlmgr doesn't
+# expose installable historical versions). The manifest is a list of names;
+# `./bin/t lock` would be the place to add reproducible version pinning.
+
+[packages]
+fontspec     = "*"
+unicode-math = "*"
+lm-math      = "*"   # Latin Modern Math (default math font)
+mathtools    = "*"
+physics2     = "*"
+siunitx      = "*"
+cleveref     = "*"
+biblatex     = "*"
+biber        = "*"
+csquotes     = "*"
+microtype    = "*"
+booktabs     = "*"
+hyperref     = "*"
+pgf          = "*"   # provides tikz
+pgfplots     = "*"

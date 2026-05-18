@@ -1,0 +1,61 @@
+% =============================================================
+% Preamble: package loads, math font setup, and document macros.
+% Engine: LuaLaTeX (preferred) or XeLaTeX. Not pdfLaTeX.
+% =============================================================
+
+% --- Math first ---------------------------------------------
+% mathtools must load before unicode-math or you get a warning
+% about \overbracket/\underbracket being silently redefined.
+\usepackage{mathtools}
+
+% --- Fonts ---------------------------------------------------
+\usepackage{fontspec}
+\usepackage{unicode-math}
+
+% Latin Modern ships with every TinyTeX/TeX Live install, so the
+% skeleton compiles out of the box. To switch to a different stack
+% (e.g. Libertinus + STIX), run
+%   ./bin/t add libertinus-fonts stix2-otf
+% and replace the four \set...font lines below.
+\setmainfont{Latin Modern Roman}
+\setsansfont{Latin Modern Sans}
+\setmonofont{Latin Modern Mono}[Scale=MatchLowercase]
+\setmathfont{Latin Modern Math}
+
+% --- Math add-ons -------------------------------------------
+\usepackage{physics2}
+\usephysicsmodule{ab}
+
+% --- Units, numbers, tables ---------------------------------
+\usepackage{siunitx}
+\usepackage{booktabs}
+
+% --- Typography ---------------------------------------------
+\usepackage{microtype}
+\usepackage{csquotes}   % must load before biblatex
+
+% --- Figures ------------------------------------------------
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% --- Bibliography -------------------------------------------
+\usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
+\addbibresource{refs.bib}
+
+% --- Cross-references (load hyperref last, cleveref after) --
+\usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
+
+% --- Reproducibility ----------------------------------------
+% Strip non-deterministic PDF metadata under LuaLaTeX. The guard
+% lets the same preamble compile under XeLaTeX without erroring.
+\ifdefined\pdfvariable
+  \pdfvariable suppressoptionalinfo 512
+\fi
+
+% --- Project macros -----------------------------------------
+% Add paper-specific operators and symbols here. The two below
+% are used in src/02-method.tex so you can see the convention.
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\R}{\mathbb{R}}

@@ -7,27 +7,24 @@ This repository contains the LaTeX source for the paper, a reproducible build se
 ## Quick start
 
 ```bash
-# 1. Install the TeX engine (one-time, ~150 MB)
+# 1. Install TinyTeX (one-time, ~150 MB). The installer adds itself to
+#    PATH automatically; restart your shell after it finishes.
 curl -sL https://yihui.org/tinytex/install-bin-unix.sh | sh
-export PATH="$HOME/.TinyTeX/bin/$(uname -m)-linux:$PATH"
 
-# 2. Install project dependencies (reads tex-packages.toml)
-./scripts/tex-add restore
-
-# 3. Build
-latexmk
+# 2. Restore project dependencies and build.
+./bin/t restore
+make            # or: latexmk
 ```
 
 The output PDF lands at `build/main.pdf`. Source files stay clean: every `.aux`, `.log`, `.bbl`, and `.fls` lives under `build/`.
 
-If the build fails because a package is missing, `latexmk` will print the exact `tex-add add ...` command to fix it. See [Recovering from a failed build](#recovering-from-a-failed-build).
+If the build fails because a package is missing, `latexmk` will print the exact `t add ...` command to fix it. See [Recovering from a failed build](#recovering-from-a-failed-build).
 
 ## Prerequisites
 
 - **[TinyTeX](https://yihui.org/tinytex/)** — minimal TeX Live (~150 MB). Bundles `tlmgr`, `latexmk`, `biber`, and every standard engine.
 - **A modern engine.** This project compiles with **LuaLaTeX**. XeLaTeX works as a fallback; pdfLaTeX is not supported (we rely on OpenType math fonts).
-- **Python 3.11+** for the `tex-add` helper (standard library only).
-- **Optional:** `biber` for the bibliography backend (TinyTeX bundles it; on Linux you may need `ln -s ~/.TinyTeX/bin/*/biber ~/bin/`).
+- **Python 3** for the `bin/t` helper (3.11+ uses the stdlib `tomllib`; older Pythons can `pip install tomli`).
 
 A full TeX Live install also works; nothing here is TinyTeX-specific other than the install command above.
 
@@ -36,6 +33,7 @@ A full TeX Live install also works; nothing here is TinyTeX-specific other than 
 ```
 .
 ├── README.md
+├── Makefile                 # `make`, `make watch`, `make clean`
 ├── main.tex                 # entry point
 ├── tex-packages.toml        # declared package dependencies (manifest)
 ├── .latexmkrc               # build config
@@ -45,11 +43,10 @@ A full TeX Live install also works; nothing here is TinyTeX-specific other than 
 │   ├── 02-method.tex
 │   ├── 03-results.tex
 │   └── 04-discussion.tex
-├── figures/
-│   └── *.pdf
+├── figures/                 # put external .pdf / .png assets here
 ├── refs.bib
-├── scripts/
-│   └── tex-add              # package manager wrapper
+├── bin/
+│   └── t                    # package manager wrapper (mnemonic: tex)
 └── build/                   # generated; gitignored
 ```
 
@@ -57,10 +54,10 @@ A full TeX Live install also works; nothing here is TinyTeX-specific other than 
 
 | Command | Effect |
 |---|---|
-| `latexmk` | Single build into `build/`. Halts on first error and prints a fix suggestion. |
-| `latexmk -pvc` | Watch mode; auto-rebuilds and refreshes the viewer. |
-| `latexmk -c` | Clean intermediates (keeps PDF). |
-| `latexmk -C` | Clean everything including PDF. |
+| `make` / `latexmk` | Single build into `build/`. Halts on first error and prints a fix suggestion. |
+| `make watch` / `latexmk -pvc` | Watch mode; auto-rebuilds and refreshes the viewer. |
+| `make clean` / `latexmk -c` | Clean intermediates (keeps PDF). |
+| `make realclean` / `latexmk -C` | Clean everything including PDF. |
 
 ### `.latexmkrc`
 
@@ -79,7 +76,7 @@ $xelatex  = 'xelatex  -interaction=nonstopmode -halt-on-error '
           . '-file-line-error -synctex=1 %O %S';
 
 # On failure, parse the log and print a runnable fix command.
-$failure_cmd = './scripts/tex-add diagnose';
+$failure_cmd = './bin/t diagnose';
 
 # Use zathura for forward/inverse search with neovim/vimtex
 $pdf_previewer = 'zathura --synctex-editor-command "nvim --remote +%l %f" %O %S';
@@ -87,17 +84,17 @@ $pdf_previewer = 'zathura --synctex-editor-command "nvim --remote +%l %f" %O %S'
 
 ## Recovering from a failed build
 
-When the build fails on a missing package, latexmk's `$failure_cmd` runs `tex-add diagnose` automatically. Typical output:
+When the build fails on a missing package, latexmk's `$failure_cmd` runs `t diagnose` automatically. Typical output:
 
 ```
 ! LaTeX Error: File `tikz-cd.sty' not found.
 warn  build references 1 missing file(s):
   - tikz-cd.sty
 
-suggested: tex-add add tikz-cd
+suggested: t add tikz-cd
 ```
 
-Run the suggested command, then re-run `latexmk`. If you'd rather skip the copy-paste, `./scripts/tex-add missing` does the diagnose-then-install in one step (with a confirmation prompt).
+Run the suggested command, then re-run `latexmk`. If you'd rather skip the copy-paste, `./bin/t missing` does the diagnose-then-install in one step (with a confirmation prompt).
 
 ## Editor setup
 
@@ -126,28 +123,26 @@ VimTeX reads `.latexmkrc` automatically, so the build config above is the single
 
 ## Modern unicode-math workflow
 
-We use **OpenType math fonts** via `unicode-math`. The relevant preamble lines:
+We use OpenType math fonts via `unicode-math`. The default stack is Latin Modern because it ships with every TinyTeX install, so the skeleton compiles immediately:
 
 ```latex
 \usepackage{fontspec}
 \usepackage{unicode-math}
 
-\setmainfont{Libertinus Serif}
-\setsansfont{Libertinus Sans}
-\setmonofont{JetBrains Mono}[Scale=MatchLowercase]
-\setmathfont{Libertinus Math}
-
-% Range fallback for symbols the primary font misses
-\setmathfont{STIX Two Math}[range={\setminus,\smallsetminus}]
+\setmainfont{Latin Modern Roman}
+\setsansfont{Latin Modern Sans}
+\setmonofont{Latin Modern Mono}[Scale=MatchLowercase]
+\setmathfont{Latin Modern Math}
 ```
 
-Why: one font handles all math, you can paste real Unicode math characters (α, ∇, ⊗, ℝ) directly into source, and `microtype` works fully under LuaLaTeX. See `src/_preamble.tex` for the full setup.
+Why OTF math: one font handles all math, you can paste real Unicode math characters ($\alpha$, $\nabla$, $\otimes$, $\mathbb{R}$) directly into source, and `microtype` works fully under LuaLaTeX. See `src/_preamble.tex` for the full setup.
 
-### Font alternatives (all free)
+### Switching fonts
 
-- **Latin Modern Math** — classic Computer Modern look, default if you want zero opinions.
+To change the math stack, install the fonts and edit the four `\set...font` lines in `src/_preamble.tex`. Free alternatives we like:
+
+- **Libertinus Math** + **STIX Two Math** fallback — `./bin/t add libertinus-fonts stix2-otf`.
 - **New Computer Modern Math** — modernized CM, sharper at screen sizes.
-- **Libertinus Math** — the default for this project.
 - **STIX Two Math** — broadest symbol coverage; preferred by IEEE/Nature-style journals.
 - **TeX Gyre {Termes,Pagella,Bonum,Schola} Math** — Times/Palatino/Bookman/Century with matching math.
 - **Erewhon Math** — Utopia-flavored, very readable.
@@ -170,7 +165,6 @@ Declared in `tex-packages.toml`. The core set:
 | `microtype` | protrusion and font expansion |
 | `booktabs` | tables that don't look like 1995 |
 | `tikz` + `pgfplots` | figures |
-| `algorithm2e` | algorithm pseudocode |
 
 ## Dependency management
 
@@ -181,41 +175,31 @@ Inspired by Cargo. The `tex-packages.toml` declares packages; it's committed alo
 [packages]
 mathtools    = "*"
 physics2     = "*"
-siunitx      = ">=3.0"
+siunitx      = "*"
 cleveref     = "*"
 biblatex     = "*"
 unicode-math = "*"
 ```
 
-The helper script `scripts/tex-add` wraps `tlmgr` for an ergonomic CLI:
+Every entry uses `"*"` — version pinning isn't enforced yet (see [Reproducibility](#reproducibility)).
+
+The helper script `bin/t` (mnemonic: tex) wraps `tlmgr` for an ergonomic CLI:
 
 | Command | Purpose |
 |---|---|
-| `tex-add search siunitx tikz-cd` | Search tlmgr by package name and filename; takes one or more terms. |
-| `tex-add search amsmath.sty` | If a term ends in `.sty`/`.cls`/`.tex`/etc., it's treated as a filename. |
-| `tex-add add tikz-cd pgfplots` | Install packages and append them to `tex-packages.toml`. |
-| `tex-add diagnose` | Parse `build/main.log`, list missing files, print a suggested install command. Exits 1 if anything is missing. |
-| `tex-add diagnose path/to/file.log` | Same, on a specific log. |
-| `tex-add missing` | Diagnose, then prompt before installing the suggested packages. |
-| `tex-add restore` | Install everything declared in `tex-packages.toml`. |
+| `t search siunitx tikz-cd` | Search tlmgr by package name and filename; takes one or more terms. |
+| `t search amsmath.sty` | If a term ends in `.sty`/`.cls`/`.tex`/etc., it's treated as a filename. |
+| `t add tikz-cd pgfplots` | Install packages and append them to `tex-packages.toml`. |
+| `t diagnose` | Parse `build/aux/main.log`, list missing files, print a suggested install command. Exits 1 if anything is missing. |
+| `t diagnose path/to/file.log` | Same, on a specific log. |
+| `t missing` | Diagnose, then prompt before installing the suggested packages. |
+| `t restore` | Install everything declared in `tex-packages.toml`. |
 
 `diagnose` is wired into `.latexmkrc` as `$failure_cmd`, so a missing-package build failure self-documents the fix without you having to remember any of these commands.
 
 ## Reproducibility
 
-Bit-identical PDFs across machines require all three of:
-
-1. **Same TeX engine version.** Pin TinyTeX with a specific TeX Live year (`TINYTEX_INSTALLER=installer-2025 ...`).
-2. **Same package versions.** Lock with `tlmgr info --only-installed --data name,cat-version > tex-packages.lock` and commit it. `tex-add restore` can be extended to read this for strict pinning.
-3. **Stripped PDF metadata.** Add to the preamble:
-
-   ```latex
-   \pdfvariable suppressoptionalinfo 512   % LuaLaTeX
-   ```
-
-   (Under pdfLaTeX use `\pdfinfoomitdate=1` and `\pdfsuppressptexinfo=-1`.)
-
-If true byte-level reproducibility matters more than engine flexibility, switch to [Tectonic](https://tectonic-typesetting.github.io/) and pin a bundle URL in `Tectonic.toml`. The tradeoff: Tectonic is XeTeX-only in practice (LuaLaTeX support is in progress but not stable), lags TeX Live releases, and a few packages (notably `microtype` protrusion) don't fully work.
+The preamble runs `\pdfvariable suppressoptionalinfo 512` under LuaLaTeX, so timestamps and engine fingerprints don't leak into the PDF. The manifest tracks package names, not versions; if you need byte-identical PDFs across machines, switch to [Tectonic](https://tectonic-typesetting.github.io/) and pin a bundle URL in `Tectonic.toml`. Tradeoffs: Tectonic is XeTeX-only in practice, lags TeX Live releases, and a few packages (notably `microtype` protrusion) don't fully work.
 
 ## License
 

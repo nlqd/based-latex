@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-tex-add — Cargo-style package manager wrapper for TeX Live / TinyTeX.
+t — Cargo-style package manager wrapper for TeX Live / TinyTeX.
 
 Commands:
   search <terms...>           Search tlmgr by package name AND filename.
-                              Bare names work: `tex-add search siunitx tikz-cd`.
+                              Bare names work: `t search siunitx tikz-cd`.
                               File-like terms (foo.sty) are searched as files.
   add <pkgs...>               Install packages and record them in
                               tex-packages.toml.
@@ -16,7 +16,7 @@ Commands:
                               after a confirmation prompt.
   restore                     Install everything declared in tex-packages.toml.
 
-Default log path: build/main.log (override by passing a path).
+Default log path: build/aux/main.log (override by passing a path).
 """
 from __future__ import annotations
 import argparse
@@ -31,7 +31,8 @@ except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore
 
 MANIFEST = Path("tex-packages.toml")
-DEFAULT_LOG = Path("build/main.log")
+# Matches $aux_dir in .latexmkrc; latexmk writes the log next to the .aux files.
+DEFAULT_LOG = Path("build/aux/main.log")
 
 # --- terminal colors -------------------------------------------------------
 class C:
@@ -94,40 +95,91 @@ def search(terms: list[str]) -> dict[str, set[str]]:
     return {t: search_one(t) for t in terms}
 
 # --- log parsing -----------------------------------------------------------
-# Patterns that indicate a missing file. The first capture group is the file.
-MISSING_PATTERNS = [
-    re.compile(r"! LaTeX Error: File `([^']+)' not found"),
-    re.compile(r"! I can't find file `([^']+)'"),
-    re.compile(r"! Package .* Error: File `([^']+)' not found"),
-    re.compile(r"! pdfTeX error: .* could not find file `([^']+)'"),
-    re.compile(r"! Font \\[^=]+=([^ ]+) not loadable"),
-    re.compile(r"! LaTeX Error: Environment .* undefined"),  # weaker signal
+# Each issue is a (kind, name) tuple. Kinds:
+#   package       — a .sty (installable via tlmgr)
+#   class         — a .cls (installable via tlmgr)
+#   graphic       — a missing asset referenced by \includegraphics
+#   input         — a missing .tex referenced by \input / \include
+#   font          — an OTF font fontspec couldn't load
+#   style         — a biblatex style that doesn't exist
+#   tikz-library  — a tikz library name that doesn't resolve
+
+# "File `X' not found" — generic; classified by context below. The `!`
+# prefix disappears in -file-line-error mode (becomes `path:N:`), so we
+# don't anchor on it.
+FILE_NOT_FOUND = [
+    re.compile(r"LaTeX Error: File `([^']+)' not found"),
+    re.compile(r"I can't find file `([^']+)'"),
+    re.compile(r"Package .* Error: File `([^']+)' not found"),
+    re.compile(r"pdfTeX error: .* could not find file `([^']+)'"),
     re.compile(r"Package .* Error: Unable to load picture file `([^']+)'"),
-    re.compile(r"! Class ([^ ]+) Error: .* not found"),
 ]
+FONTSPEC_FONT   = re.compile(r'\(fontspec\)\s+The font "([^"]+)" cannot be')
+BIBLATEX_STYLE  = re.compile(r"Package biblatex Error: Style '([^']+)' not found")
+TIKZ_LIBRARY    = re.compile(
+    r"Package (?:tikz|pgf) Error: I did not find the (?:tikz |pgf )?library '([^']+)'"
+)
+# `l.<n>` source-context line lets us tell graphics from inputs from packages.
+SRCLINE_RE      = re.compile(r"^l\.\d+\s+(.*)$")
 
-# \usepackage{foo} doesn't *itself* error; the missing .sty does. But we also
-# match it as a fallback for when logs are truncated.
-USEPACKAGE_RE = re.compile(r"\\usepackage(?:\[[^\]]*\])?\{([^}]+)\}")
+def classify_file(fname: str, context: str) -> str:
+    """Classify a 'File `X' not found' error by surrounding source context."""
+    if re.search(r"\\includegraphics|\\includepdf|\\pgfimage", context):
+        return "graphic"
+    if re.search(r"\\input\b|\\include\b|\\subfile\b", context):
+        return "input"
+    if fname.endswith(".cls"):
+        return "class"
+    return "package"
 
-def parse_log(path: Path) -> list[str]:
-    """Return a deduplicated list of missing files mentioned in the log."""
+def parse_log(path: Path) -> list[tuple[str, str]]:
+    """Return deduped (kind, name) tuples for every issue mentioned in the log."""
     if not path.exists():
         err(f"log not found: {path}")
         sys.exit(2)
 
-    text = path.read_text(errors="replace")
-    missing: list[str] = []
-    for pat in MISSING_PATTERNS:
-        for m in pat.finditer(text):
-            if m.groups():
-                f = m.group(1).strip()
-                # Normalize: add .sty if no extension and looks like a package
-                if "." not in f and not f.startswith("/"):
-                    f = f + ".sty"
-                if f not in missing:
-                    missing.append(f)
-    return missing
+    lines = path.read_text(errors="replace").splitlines()
+    issues: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(kind: str, name: str):
+        key = (kind, name)
+        if key not in seen:
+            seen.add(key)
+            issues.append(key)
+
+    for i, line in enumerate(lines):
+        if m := FONTSPEC_FONT.search(line):
+            add("font", m.group(1))
+            continue
+        if m := BIBLATEX_STYLE.search(line):
+            add("style", m.group(1))
+            continue
+        if m := TIKZ_LIBRARY.search(line):
+            add("tikz-library", m.group(1))
+            continue
+
+        for pat in FILE_NOT_FOUND:
+            m = pat.search(line)
+            if not m:
+                continue
+            fname = m.group(1).strip()
+            # Look ahead a few lines for the `l.<n>` source context.
+            context = ""
+            for ln in lines[i + 1 : i + 10]:
+                cm = SRCLINE_RE.match(ln)
+                if cm:
+                    context = cm.group(1)
+                    break
+            kind = classify_file(fname, context)
+            # Bare names without an extension default to .sty (latex's own
+            # error often drops the suffix).
+            if kind == "package" and "." not in fname and not fname.startswith("/"):
+                fname += ".sty"
+            add(kind, fname)
+            break
+
+    return issues
 
 # --- manifest --------------------------------------------------------------
 def load_manifest() -> dict:
@@ -174,33 +226,73 @@ def cmd_add(args):
 
 def cmd_diagnose(args, *, do_install: bool = False):
     log = Path(args.log) if args.log else DEFAULT_LOG
-    missing = parse_log(log)
-    if not missing:
-        ok("no missing files detected")
+    issues = parse_log(log)
+    if not issues:
+        ok("no issues detected in log")
         return 0
 
-    warn(f"build references {len(missing)} missing file(s):")
-    for f in missing:
-        print(f"  - {f}")
+    by_kind: dict[str, list[str]] = {}
+    for kind, name in issues:
+        by_kind.setdefault(kind, []).append(name)
 
-    # Resolve each missing file to a package via tlmgr.
-    pkgs: set[str] = set()
-    for f in missing:
-        pkgs |= search_one(f)
+    # Files we can plausibly resolve via tlmgr.
+    installable: list[str] = []
 
-    if not pkgs:
-        err("no tlmgr packages found for the missing files")
-        err("(try `tex-add search <name>` manually, or check the log)")
-        return 1
+    if files := by_kind.get("package"):
+        warn(f"missing package file(s):")
+        for f in files:
+            print(f"  - {f}")
+        installable.extend(files)
 
-    cmd = f"tex-add add {' '.join(sorted(pkgs))}"
-    print()
-    print(f"{C.G}suggested:{C.END} {C.BOLD}{cmd}{C.END}")
+    if files := by_kind.get("class"):
+        warn(f"missing document class(es):")
+        for f in files:
+            print(f"  - {f}")
+        installable.extend(files)
 
-    if do_install:
-        ans = input(f"\nrun this now? [y/N] ").strip().lower()
-        if ans == "y":
-            return cmd_add(argparse.Namespace(pkgs=sorted(pkgs)))
+    if names := by_kind.get("graphic"):
+        warn("missing graphic asset(s) — not a tlmgr package; check figures/ or fix the path:")
+        for n in names:
+            print(f"  - \\includegraphics{{{n}}}")
+
+    if names := by_kind.get("input"):
+        warn("missing input/include file(s) — create it or fix the path:")
+        for n in names:
+            print(f"  - \\input{{{n}}}")
+
+    if names := by_kind.get("font"):
+        warn("font not loadable — install via your OS font dir or `t add <font-pkg>`:")
+        for n in names:
+            print(f"  - {n}")
+        info("e.g. Libertinus → `t add libertinus-fonts`; STIX Two → `t add stix2-otf`")
+
+    if names := by_kind.get("style"):
+        warn("unknown biblatex style — check spelling or install the style package:")
+        for n in names:
+            print(f"  - style={n}")
+
+    if names := by_kind.get("tikz-library"):
+        warn("unknown tikz library — check spelling against ctan.org/pkg/pgf:")
+        for n in names:
+            print(f"  - \\usetikzlibrary{{{n}}}")
+
+    if installable:
+        pkgs: set[str] = set()
+        for f in installable:
+            pkgs |= search_one(f)
+        if pkgs:
+            cmd = f"t add {' '.join(sorted(pkgs))}"
+            print()
+            print(f"{C.G}suggested:{C.END} {C.BOLD}{cmd}{C.END}")
+            if do_install:
+                ans = input("\nrun this now? [y/N] ").strip().lower()
+                if ans == "y":
+                    return cmd_add(argparse.Namespace(pkgs=sorted(pkgs)))
+        else:
+            print()
+            print(f"{C.R}note{C.END}  no tlmgr packages map to the missing files")
+            print(f"      try `t search <name>` manually, or check the log")
+
     return 1  # nonzero so $failure_cmd-style callers know there was work to do
 
 def cmd_missing(args):
@@ -218,7 +310,7 @@ def cmd_restore(args):
 
 # --- entry -----------------------------------------------------------------
 def main():
-    p = argparse.ArgumentParser(prog="tex-add", description=__doc__,
+    p = argparse.ArgumentParser(prog="t", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 

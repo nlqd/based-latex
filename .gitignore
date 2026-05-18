@@ -1,0 +1,19 @@
+build/
+
+# Stray artifacts if someone runs an engine outside latexmkrc
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+
+# Editor / OS
+.DS_Store
+*.swp
+.claude/
