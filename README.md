@@ -58,6 +58,10 @@ A full TeX Live install also works; nothing here is TinyTeX-specific other than 
 | `make watch` / `latexmk -pvc` | Watch mode; auto-rebuilds and refreshes the viewer. |
 | `make clean` / `latexmk -c` | Clean intermediates (keeps PDF). |
 | `make realclean` / `latexmk -C` | Clean everything including PDF. |
+| `make lint` | Run `chktex` against `main.tex` and `src/*.tex`. |
+| `make fmt` | Run `latexindent` in-place against the same files. |
+| `make fmt-check` | Same, but fail without writing if anything would change. |
+| `make check` | `lint` plus `fmt-check`. |
 
 ### `.latexmkrc`
 
@@ -196,6 +200,19 @@ The helper script `bin/t` (mnemonic: tex) wraps `tlmgr` for an ergonomic CLI:
 | `t restore` | Install everything declared in `tex-packages.toml`. |
 
 `diagnose` is wired into `.latexmkrc` as `$failure_cmd`, so a missing-package build failure self-documents the fix without you having to remember any of these commands.
+
+## Linting and formatting
+
+`chktex` (linter) and `latexindent` (formatter) are both TeX Live packages, but neither ships with TinyTeX out of the box. `./bin/t restore` installs both since they're declared in `tex-packages.toml`.
+
+`latexindent` is a Perl script and needs four Perl modules that `tlmgr` does not install: `Log::Log4perl`, `YAML::Tiny`, `File::HomeDir`, `Unicode::GCString`. On most Linux distros:
+
+```bash
+cpan App::cpanminus
+cpanm Log::Log4perl YAML::Tiny File::HomeDir Unicode::GCString
+```
+
+If the cpanm dance is not worth it, skip `make fmt` and lean on `make lint` alone. Configs live in `.chktexrc` and `localSettings.yaml`; both are tuned to be quiet about modern-LaTeX false positives.
 
 ## Reproducibility
 

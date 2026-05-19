@@ -22,3 +22,7 @@ booktabs     = "*"
 hyperref     = "*"
 pgf          = "*"   # provides tikz
 pgfplots     = "*"
+
+# Tooling
+chktex       = "*"   # `make lint`
+latexindent  = "*"   # `make fmt` (also needs Perl modules — see README)
