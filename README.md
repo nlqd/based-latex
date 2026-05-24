@@ -2,225 +2,122 @@
 
 > One-line abstract. Replace with the actual paper.
 
-This repository contains the LaTeX source for the paper, a reproducible build setup, and a minimal toolchain that does not depend on a full TeX Live install.
-
 ## Quick start
 
 ```bash
-# 1. Install TinyTeX (one-time, ~150 MB). The installer adds itself to
-#    PATH automatically; restart your shell after it finishes.
+# 1. Install TinyTeX (~150 MB, one-time). Restart your shell after.
 curl -sL https://yihui.org/tinytex/install-bin-unix.sh | sh
 
-# 2. Restore project dependencies and build.
+# 2. Restore project packages and build.
 ./bin/t restore
-make            # or: latexmk
+make
 ```
 
-The output PDF lands at `build/main.pdf`. Source files stay clean: every `.aux`, `.log`, `.bbl`, and `.fls` lives under `build/`.
+Output lands at `build/main.pdf`. All intermediates go to `build/`.
 
-If the build fails because a package is missing, `latexmk` will print the exact `t add ...` command to fix it. See [Recovering from a failed build](#recovering-from-a-failed-build).
+If the build fails on a missing package, `latexmk` runs `t diagnose` automatically and prints the fix command. Run it, then `make` again.
 
 ## Prerequisites
 
-- **[TinyTeX](https://yihui.org/tinytex/)** — minimal TeX Live (~150 MB). Bundles `tlmgr`, `latexmk`, `biber`, and every standard engine.
-- **A modern engine.** This project compiles with **LuaLaTeX**. XeLaTeX works as a fallback; pdfLaTeX is not supported (we rely on OpenType math fonts).
-- **Python 3** for the `bin/t` helper (3.11+ uses the stdlib `tomllib`; older Pythons can `pip install tomli`).
-
-A full TeX Live install also works; nothing here is TinyTeX-specific other than the install command above.
+- [TinyTeX](https://yihui.org/tinytex/) or any full TeX Live install
+- LuaLaTeX (XeLaTeX works; pdfLaTeX does not, we use OpenType math fonts)
+- Python 3 for `bin/t` (3.11+ has `tomllib` built in; older versions need `pip install tomli`)
 
 ## Project structure
 
 ```
 .
-├── README.md
-├── Makefile                 # `make`, `make watch`, `make clean`
+├── Makefile
 ├── main.tex                 # entry point
-├── tex-packages.toml        # declared package dependencies (manifest)
-├── .latexmkrc               # build config
+├── tex-packages.toml        # package manifest
+├── .latexmkrc               # build config (engine, output dirs, failure hook)
 ├── src/
-│   ├── _preamble.tex        # \usepackage{...}, macros, math font setup
+│   ├── _preamble.tex        # packages, macros, font setup
 │   ├── 01-introduction.tex
 │   ├── 02-method.tex
 │   ├── 03-results.tex
 │   └── 04-discussion.tex
-├── figures/                 # put external .pdf / .png assets here
+├── figures/
 ├── refs.bib
-├── bin/
-│   └── t                    # package manager wrapper (mnemonic: tex)
-└── build/                   # generated; gitignored
+└── bin/t                    # package manager helper; run `./bin/t --help`
 ```
 
 ## Build
 
 | Command | Effect |
 |---|---|
-| `make` / `latexmk` | Single build into `build/`. Halts on first error and prints a fix suggestion. |
-| `make watch` / `latexmk -pvc` | Watch mode; auto-rebuilds and refreshes the viewer. |
-| `make clean` / `latexmk -c` | Clean intermediates (keeps PDF). |
-| `make realclean` / `latexmk -C` | Clean everything including PDF. |
-| `make lint` | Run `chktex` against `main.tex` and `src/*.tex`. |
-| `make fmt` | Run `latexindent` in-place against the same files. |
-| `make fmt-check` | Same, but fail without writing if anything would change. |
-| `make check` | `lint` plus `fmt-check`. |
+| `make` | Build `build/main.pdf`. Halts on first error. |
+| `make watch` | Continuous rebuild + viewer refresh. |
+| `make clean` | Remove intermediates, keep PDF. |
+| `make realclean` | Remove everything including PDF. |
+| `make lint` | Run `chktex`. |
+| `make fmt` | Run `latexindent` in-place. |
+| `make check` | Lint + format check. |
 
-### `.latexmkrc`
+Build config lives in `.latexmkrc`. The `$failure_cmd` there runs `./bin/t diagnose` on every failed build, so you always see a suggested fix.
 
-```perl
-$pdf_mode      = 4;            # 4 = lualatex, 5 = xelatex, 1 = pdflatex
-$out_dir       = 'build';
-$aux_dir       = 'build/aux';
-$bibtex_use    = 2;            # always run biber when .bcf exists
-@default_files = ('main.tex');
-
-# Stop immediately on the first error and emit file:line:error format
-# so editors can jump straight to the failure.
-$lualatex = 'lualatex -interaction=nonstopmode -halt-on-error '
-          . '-file-line-error -synctex=1 %O %S';
-$xelatex  = 'xelatex  -interaction=nonstopmode -halt-on-error '
-          . '-file-line-error -synctex=1 %O %S';
-
-# On failure, parse the log and print a runnable fix command.
-$failure_cmd = './bin/t diagnose';
-
-# Use zathura for forward/inverse search with neovim/vimtex
-$pdf_previewer = 'zathura --synctex-editor-command "nvim --remote +%l %f" %O %S';
-```
-
-## Recovering from a failed build
-
-When the build fails on a missing package, latexmk's `$failure_cmd` runs `t diagnose` automatically. Typical output:
-
-```
-! LaTeX Error: File `tikz-cd.sty' not found.
-warn  build references 1 missing file(s):
-  - tikz-cd.sty
-
-suggested: t add tikz-cd
-```
-
-Run the suggested command, then re-run `latexmk`. If you'd rather skip the copy-paste, `./bin/t missing` does the diagnose-then-install in one step (with a confirmation prompt).
-
-## Editor setup
-
-### neovim + VimTeX (recommended)
-
-Tested setup:
-
-- [`lervag/vimtex`](https://github.com/lervag/vimtex) — compiler, motions, concealment, SyncTeX.
-- [`L3MON4D3/LuaSnip`](https://github.com/L3MON4D3/LuaSnip) — snippets; pair with `iurimateus/luasnip-latex-snippets.nvim` for math-heavy work.
-- [`latex-lsp/texlab`](https://github.com/latex-lsp/texlab) — diagnostics, completion, citation lookup.
-
-Minimal VimTeX config:
-
-```lua
-vim.g.vimtex_compiler_method = 'latexmk'
-vim.g.vimtex_view_method     = 'zathura'
-vim.g.vimtex_quickfix_mode   = 0
-```
-
-VimTeX reads `.latexmkrc` automatically, so the build config above is the single source of truth. The `-file-line-error` flag means VimTeX's quickfix list jumps straight to the offending source line.
-
-### Alternatives
-
-- **VS Code:** LaTeX Workshop extension; point it at `latexmk`.
-- **Web:** Overleaf works if you mirror `_preamble.tex` and upload `refs.bib`. Note that Overleaf's TeX Live release may differ from yours; reproducibility guarantees don't carry over.
-
-## Modern unicode-math workflow
-
-We use OpenType math fonts via `unicode-math`. The default stack is Latin Modern because it ships with every TinyTeX install, so the skeleton compiles immediately:
-
-```latex
-\usepackage{fontspec}
-\usepackage{unicode-math}
-
-\setmainfont{Latin Modern Roman}
-\setsansfont{Latin Modern Sans}
-\setmonofont{Latin Modern Mono}[Scale=MatchLowercase]
-\setmathfont{Latin Modern Math}
-```
-
-Why OTF math: one font handles all math, you can paste real Unicode math characters ($\alpha$, $\nabla$, $\otimes$, $\mathbb{R}$) directly into source, and `microtype` works fully under LuaLaTeX. See `src/_preamble.tex` for the full setup.
-
-### Switching fonts
-
-To change the math stack, install the fonts and edit the four `\set...font` lines in `src/_preamble.tex`. Free alternatives we like:
-
-- **Libertinus Math** + **STIX Two Math** fallback — `./bin/t add libertinus-fonts stix2-otf`.
-- **New Computer Modern Math** — modernized CM, sharper at screen sizes.
-- **STIX Two Math** — broadest symbol coverage; preferred by IEEE/Nature-style journals.
-- **TeX Gyre {Termes,Pagella,Bonum,Schola} Math** — Times/Palatino/Bookman/Century with matching math.
-- **Erewhon Math** — Utopia-flavored, very readable.
-- **Fira Math** — sans-serif math, good for slides.
-
-## Package stack
-
-Declared in `tex-packages.toml`. The core set:
-
-| Package | Purpose |
-|---|---|
-| `fontspec` | OTF text fonts |
-| `unicode-math` | OTF math fonts |
-| `mathtools` | amsmath superset |
-| `physics2` | clean bracket/derivative macros |
-| `siunitx` | units, numbers, tabular numerical data |
-| `cleveref` | smart cross-references (`\cref{eq:loss}` → "equation 3") |
-| `biblatex` + `biber` | modern bibliography |
-| `csquotes` | quotes that interact correctly with biblatex |
-| `microtype` | protrusion and font expansion |
-| `booktabs` | tables that don't look like 1995 |
-| `tikz` + `pgfplots` | figures |
+The `$pdf_previewer` line is set up for zathura + neovim/vimtex. Comment it out or change it to match your viewer.
 
 ## Dependency management
 
-Inspired by Cargo. The `tex-packages.toml` declares packages; it's committed alongside the source.
+`tex-packages.toml` declares packages (Cargo-style). The helper script `bin/t` wraps `tlmgr`:
 
-```toml
-# tex-packages.toml
-[packages]
-mathtools    = "*"
-physics2     = "*"
-siunitx      = "*"
-cleveref     = "*"
-biblatex     = "*"
-unicode-math = "*"
+```
+./bin/t --help
 ```
 
-Every entry uses `"*"` — version pinning isn't enforced yet (see [Reproducibility](#reproducibility)).
+The key commands are `restore` (install everything in the manifest), `add` (install + record), and `diagnose` (parse the build log and suggest missing packages). `diagnose` is wired into `.latexmkrc` so it runs automatically on failure.
 
-The helper script `bin/t` (mnemonic: tex) wraps `tlmgr` for an ergonomic CLI:
+## Fonts
 
-| Command | Purpose |
+The default stack is Latin Modern: it ships with every TinyTeX install so the skeleton compiles immediately. The preamble uses `fontspec` + `unicode-math` for OpenType math.
+
+To switch fonts, edit the `\set...font` lines in `src/_preamble.tex` and install the font package. Some free options:
+
+- Libertinus Math: `./bin/t add libertinus-fonts stix2-otf`
+- New Computer Modern Math, STIX Two Math, TeX Gyre family, Erewhon Math, Fira Math
+
+## Package stack
+
+Declared in `tex-packages.toml`:
+
+| Package | Purpose |
 |---|---|
-| `t search siunitx tikz-cd` | Search tlmgr by package name and filename; takes one or more terms. |
-| `t search amsmath.sty` | If a term ends in `.sty`/`.cls`/`.tex`/etc., it's treated as a filename. |
-| `t add tikz-cd pgfplots` | Install packages and append them to `tex-packages.toml`. |
-| `t diagnose` | Parse `build/aux/main.log`, list missing files, print a suggested install command. Exits 1 if anything is missing. |
-| `t diagnose path/to/file.log` | Same, on a specific log. |
-| `t missing` | Diagnose, then prompt before installing the suggested packages. |
-| `t restore` | Install everything declared in `tex-packages.toml`. |
-
-`diagnose` is wired into `.latexmkrc` as `$failure_cmd`, so a missing-package build failure self-documents the fix without you having to remember any of these commands.
+| `fontspec` + `unicode-math` | OTF text and math fonts |
+| `mathtools` | amsmath superset |
+| `physics2` | bracket/derivative macros |
+| `siunitx` | units and numerical data |
+| `cleveref` | smart cross-references |
+| `biblatex` + `biber` | bibliography |
+| `csquotes` | quotes compatible with biblatex |
+| `microtype` | protrusion and font expansion |
+| `booktabs` | tables |
+| `tikz` + `pgfplots` | figures |
 
 ## Linting and formatting
 
-`chktex` (linter) and `latexindent` (formatter) are both TeX Live packages, but neither ships with TinyTeX out of the box. `./bin/t restore` installs both since they're declared in `tex-packages.toml`.
-
-`latexindent` is a Perl script and needs four Perl modules that `tlmgr` does not install: `Log::Log4perl`, `YAML::Tiny`, `File::HomeDir`, `Unicode::GCString`. On most Linux distros:
+`chktex` and `latexindent` are declared in `tex-packages.toml`, so `./bin/t restore` installs both. `latexindent` also needs four Perl modules that `tlmgr` does not ship:
 
 ```bash
 cpan App::cpanminus
 cpanm Log::Log4perl YAML::Tiny File::HomeDir Unicode::GCString
 ```
 
-If the cpanm dance is not worth it, skip `make fmt` and lean on `make lint` alone. Configs live in `.chktexrc` and `localSettings.yaml`; both are tuned to be quiet about modern-LaTeX false positives.
+If that's not worth it, skip `make fmt` and use `make lint` alone. Configs: `.chktexrc`, `localSettings.yaml`.
+
+## Editor setup
+
+neovim + [vimtex](https://github.com/lervag/vimtex) is the tested setup. VimTeX reads `.latexmkrc` automatically. Useful companions: [LuaSnip](https://github.com/L3MON4D3/LuaSnip) for snippets, [texlab](https://github.com/latex-lsp/texlab) for LSP.
+
+VS Code works with the LaTeX Workshop extension pointed at `latexmk`. Overleaf works if you mirror `_preamble.tex` and `refs.bib`, but its TeX Live version may differ.
 
 ## Reproducibility
 
-The preamble runs `\pdfvariable suppressoptionalinfo 512` under LuaLaTeX, so timestamps and engine fingerprints don't leak into the PDF. The manifest tracks package names, not versions; if you need byte-identical PDFs across machines, switch to [Tectonic](https://tectonic-typesetting.github.io/) and pin a bundle URL in `Tectonic.toml`. Tradeoffs: Tectonic is XeTeX-only in practice, lags TeX Live releases, and a few packages (notably `microtype` protrusion) don't fully work.
+The preamble sets `\pdfvariable suppressoptionalinfo 512` under LuaLaTeX so timestamps don't leak into the PDF. The manifest tracks package names, not versions. For byte-identical PDFs across machines, consider [Tectonic](https://tectonic-typesetting.github.io/) with a pinned bundle URL.
 
 ## License
 
-Paper text and figures: CC BY 4.0. Code (scripts, build config): MIT.
+Paper text and figures: CC BY 4.0. Code: MIT.
 
 ## Citation
 

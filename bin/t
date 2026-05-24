@@ -2,21 +2,25 @@
 """
 t — Cargo-style package manager wrapper for TeX Live / TinyTeX.
 
-Commands:
-  search <terms...>           Search tlmgr by package name AND filename.
-                              Bare names work: `t search siunitx tikz-cd`.
-                              File-like terms (foo.sty) are searched as files.
-  add <pkgs...>               Install packages and record them in
-                              tex-packages.toml.
-  diagnose [LOG]              Parse a LaTeX log, find missing files/packages,
-                              print suggested install commands. Exits 1 if
-                              anything is missing. Use as $failure_cmd in
-                              .latexmkrc to get auto-suggestions on failure.
-  missing [LOG]               Like diagnose, but actually run the install
-                              after a confirmation prompt.
-  restore                     Install everything declared in tex-packages.toml.
+Usage:
+  t search <terms...>    Search tlmgr by package name and filename.
+                         Terms ending in .sty/.cls/.tex are file searches.
+                         Example: t search siunitx tikz-cd amsmath.sty
 
-Default log path: build/aux/main.log (override by passing a path).
+  t add <pkgs...>        Install via tlmgr and record in tex-packages.toml.
+                         Example: t add tikz-cd pgfplots
+
+  t diagnose [LOG]       Parse a build log for missing files, fonts, styles,
+                         and tikz libraries. Prints a suggested install command.
+                         Classifies errors by kind (package, class, graphic,
+                         input, font, style, tikz-library) and gives guidance
+                         for each. Wired as $failure_cmd in .latexmkrc so it
+                         runs automatically on build failure.
+                         Default log: build/aux/main.log
+
+  t missing [LOG]        Like diagnose, but prompts to install afterward.
+
+  t restore              Install everything declared in tex-packages.toml.
 """
 from __future__ import annotations
 import argparse
