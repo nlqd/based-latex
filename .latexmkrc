@@ -5,9 +5,9 @@ $bibtex_use    = 2;
 @default_files = ('main.tex');
 
 $lualatex = 'lualatex -interaction=nonstopmode -halt-on-error '
-          . '-file-line-error -synctex=1 %O %S';
+          . '-file-line-error -shell-escape -synctex=-1 %O %S';
 $xelatex  = 'xelatex  -interaction=nonstopmode -halt-on-error '
-          . '-file-line-error -synctex=1 %O %S';
+          . '-file-line-error -shell-escape -synctex=-1 %O %S';
 
 $failure_cmd = './bin/t diagnose';
 

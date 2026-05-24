@@ -88,8 +88,11 @@ Declared in `tex-packages.toml`:
 | `biblatex` + `biber` | bibliography |
 | `csquotes` | quotes compatible with biblatex |
 | `microtype` | protrusion and font expansion |
+| `selnolig` | automatic bad-ligature suppression |
 | `booktabs` | tables |
 | `tikz` + `pgfplots` | figures |
+| `todonotes` | draft annotations (`\todo{...}`) |
+| `hypcap` | hyperlinks jump to floats, not captions |
 
 ## Linting and formatting
 

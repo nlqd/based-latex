@@ -1,32 +1,29 @@
 \section{Introduction}
 \label{sec:intro}
 
-This section exercises every package in the stack so you can see how the
-template renders. Prior work on variational inference~\autocite{example2024}
-motivates the objective in \cref{sec:method}; \cref{sec:results} shows
-placeholder outputs.
+This section exercises every package in the stack so you can see how the template renders.
+Prior work on variational inference~\autocite{example2024} motivates the objective in \cref{sec:method}.
+\Cref{sec:results} shows placeholder outputs.
 
 \section{Method}
 \label{sec:method}
 
-Let $f \colon \R^n \to \R$ be a twice-differentiable objective. We seek
+Let $f \colon \R^n \to \R$ be a twice-differentiable objective.
+We seek
 %
 \begin{equation}
   \label{eq:argmin}
   x^\star = \argmin_{x \in \R^n}\, f(x).
 \end{equation}
 %
-The gradient is $\nabla f(x) \in \R^n$ and the Hessian is
-$\nabla^2 f(x) \in \R^{n \times n}$.
-When $f$ is $\mu$-strongly convex, the condition number
-$\kappa = L / \mu$ governs convergence. Standard bracket notation from
-\texttt{physics2}: $\ab|x|$ and $\ab(x + y)$.
+The gradient is $\nabla f(x) \in \R^n$ and the Hessian is $\nabla^2 f(x) \in \R^{n \times n}$.
+When $f$ is $\mu$-strongly convex, the condition number $\kappa = L / \mu$ governs convergence.
+Standard bracket notation from \texttt{physics2}: $\ab|x|$ and $\ab(x + y)$.
 
 \section{Results}
 \label{sec:results}
 
-\Cref{fig:objective} shows a toy objective rendered inline with
-Ti\textit{k}Z. % chktex 13
+\Cref{fig:objective} shows a toy objective rendered inline with \TikZ.
 
 \begin{figure}[h]
   \centering
@@ -40,8 +37,7 @@ Ti\textit{k}Z. % chktex 13
   \label{fig:objective}
 \end{figure}
 
-\Cref{tab:results} compares two methods using \texttt{booktabs} and
-\texttt{siunitx}.
+\Cref{tab:results} compares two methods using \texttt{booktabs} and \texttt{siunitx}.
 
 \begin{table}[h]
   \centering
@@ -57,5 +53,5 @@ Ti\textit{k}Z. % chktex 13
   \label{tab:results}
 \end{table}
 
-As \cref{eq:argmin} and \cref{tab:results} show, the method recovers
-$x^\star$ with accuracy \num{0.91} in \SI{9}{\milli\second}.
+As \cref{eq:argmin} and \cref{tab:results} show, the method recovers $x^\star$ with accuracy \num{0.91} in \SI{9}{\milli\second}.
+\todo{Replace with real results.}

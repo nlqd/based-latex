@@ -4,10 +4,23 @@ onlyOneBackUp: 1
 
 modifyLineBreaks:
   oneSentencePerLine:
-    manipulateSentences: 0
+    manipulateSentences: 1
+    sentencesBeginWith:
+      A-Z: 1
+      a-z: 0
+    sentencesEndWith:
+      basicFullStop: 0
+      betterFullStop: 1
 
 verbatimEnvironments:
   verbatim: 1
   lstlisting: 1
   minted: 1
   tikzpicture: 1
+  markdown: 1
+
+noAdditionalIndentGlobal:
+  filecontents: 1
+
+indentRulesGlobal:
+  command: 0
