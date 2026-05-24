@@ -1,6 +1,4 @@
 build/
-
-# Stray artifacts if someone runs an engine outside latexmkrc
 *.aux
 *.bbl
 *.bcf
@@ -12,12 +10,8 @@ build/
 *.run.xml
 *.synctex.gz
 *.toc
-
-# latexindent backups
 *.bak*
 indent.log
-
-# Editor / OS
 .DS_Store
 *.swp
 .claude/

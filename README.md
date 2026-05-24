@@ -33,10 +33,7 @@ If the build fails on a missing package, `latexmk` runs `t diagnose` automatical
 ├── .latexmkrc               # build config (engine, output dirs, failure hook)
 ├── src/
 │   ├── _preamble.tex        # packages, macros, font setup
-│   ├── 01-introduction.tex
-│   ├── 02-method.tex
-│   ├── 03-results.tex
-│   └── 04-discussion.tex
+│   └── sample.tex           # lorem ipsum exercising the full stack
 ├── figures/
 ├── refs.bib
 └── bin/t                    # package manager helper; run `./bin/t --help`

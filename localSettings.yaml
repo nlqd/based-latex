@@ -1,16 +1,11 @@
-# latexindent local settings. Auto-discovered when invoked with `-l`.
-# See https://latexindentpl.readthedocs.io/ for the full schema.
-
 defaultIndent: "  "
 indentPreamble: 1
 onlyOneBackUp: 1
 
-# Don't rewrite line breaks — authors choose where sentences end.
 modifyLineBreaks:
   oneSentencePerLine:
     manipulateSentences: 0
 
-# Leave verbatim-like environments alone.
 verbatimEnvironments:
   verbatim: 1
   lstlisting: 1

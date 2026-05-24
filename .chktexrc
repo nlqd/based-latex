@@ -1,9 +1,6 @@
-# chktex configuration. Extends the system default.
-#
-# Note: the `Silent` directive lists *commands* that may end with a space
-# without triggering warning 1 — it does NOT silence warnings by number.
-# To silence a warning class, pass `-n<N>` on the command line (see Makefile).
-# To silence a single line, add `% chktex N` at the end of that line.
+# Silent lists commands that may end with a space without triggering warning 1.
+# To silence a warning number, pass -n<N> on the command line (see Makefile).
+# To silence a single line, add % chktex N at the end of that line.
 
 Silent
 {

@@ -1,8 +1,6 @@
 TEX_FILES := main.tex $(wildcard src/*.tex)
 
-# Warnings we silence project-wide:
-#  -n24  "Delete this space to maintain correct pagereferences" — false positive
-#        for our `\label{}` on its own line in section/figure/table contexts.
+# -n24: silence false positive for \label{} on its own line
 CHKTEX_FLAGS := -q -l .chktexrc -n24
 
 .PHONY: all watch clean realclean lint fmt fmt-check check
