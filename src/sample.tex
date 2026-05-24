@@ -1,14 +1,18 @@
 \section{Introduction}
 \label{sec:intro}
 
-This section exercises every package in the stack so you can see how the template renders.
-Prior work on variational inference~\autocite{example2024} motivates the objective in \cref{sec:method}.
-\Cref{sec:results} shows placeholder outputs.
+This sample exercises every package in the stack.
+\enquote{Clone and build} is the goal: run \texttt{make} and get a working PDF\@.
+Prior work~\autocite{example2024} motivates the setup.
+\Cref{sec:method} defines the problem; \cref{sec:results} shows outputs.
+\todo[inline]{This file is a kitchen-sink demo.
+  Delete it and start writing.
+}
 
 \section{Method}
 \label{sec:method}
 
-Let $f \colon \R^n \to \R$ be a twice-differentiable objective.
+Let $f \colon \R^n \to \R$ be twice differentiable.
 We seek
 %
 \begin{equation}
@@ -16,14 +20,33 @@ We seek
   x^\star = \argmin_{x \in \R^n}\, f(x).
 \end{equation}
 %
-The gradient is $\nabla f(x) \in \R^n$ and the Hessian is $\nabla^2 f(x) \in \R^{n \times n}$.
-When $f$ is $\mu$-strongly convex, the condition number $\kappa = L / \mu$ governs convergence.
-Standard bracket notation from \texttt{physics2}: $\ab|x|$ and $\ab(x + y)$.
+The solution satisfies
+%
+\begin{equation}
+  \label{eq:cases}
+  \nabla f(x^\star) =
+  \begin{dcases}
+    0        & \text{if } x^\star \in \operatorname{int}(\R^n), \\
+    -\lambda & \text{otherwise.}
+  \end{dcases}
+\end{equation}
+%
+We define $g \coloneqq \nabla f$ and note
+%
+\begin{align}
+  \|g(x)\|^2 & \leq L \ab(f(x) - f(x^\star)) \label{eq:gradient-bound} \\
+  \shortintertext{with}
+  L          & \coloneqq \sup_{x} \|\nabla^2 f(x)\|.
+  \notag
+\end{align}
+%
+The condition number is $\kappa \coloneqq L / \mu$ where $f$ is $\mu$-strongly convex.
+Standard bracket notation from \texttt{physics2}: $\ab|x|$, $\ab[x]$, and $\ab(x + y)$.
 
 \section{Results}
 \label{sec:results}
 
-\Cref{fig:objective} shows a toy objective rendered inline with \TikZ.
+\Cref{fig:objective} shows a \TikZ{} sketch and \cref{fig:convergence} shows a \texttt{pgfplots} chart.
 
 \begin{figure}[h]
   \centering
@@ -37,7 +60,31 @@ Standard bracket notation from \texttt{physics2}: $\ab|x|$ and $\ab(x + y)$.
   \label{fig:objective}
 \end{figure}
 
-\Cref{tab:results} compares two methods using \texttt{booktabs} and \texttt{siunitx}.
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        width=0.65\textwidth, height=5cm,
+        xlabel={Iteration $k$}, ylabel={$f(x_k) - f(x^\star)$},
+        ymode=log, grid=major,
+        legend pos=north east,
+      ]
+      \addplot[thick, mark=none, blue] coordinates {
+          (0,1) (1,0.5) (2,0.25) (3,0.125) (4,0.0625) (5,0.03125)
+        };
+      \addlegendentry{$\kappa = 2$}
+      \addplot[thick, mark=none, red, dashed] coordinates {
+          (0,1) (1,0.8) (2,0.64) (3,0.512) (4,0.410) (5,0.328)
+        };
+      \addlegendentry{$\kappa = 5$}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Convergence rate depends on $\kappa$; see \cref{eq:gradient-bound}.}
+  \label{fig:convergence}
+\end{figure}
+
+\Cref{tab:results} compares two methods.
+\todo{Replace with real numbers.}
 
 \begin{table}[h]
   \centering
@@ -53,5 +100,6 @@ Standard bracket notation from \texttt{physics2}: $\ab|x|$ and $\ab(x + y)$.
   \label{tab:results}
 \end{table}
 
-As \cref{eq:argmin} and \cref{tab:results} show, the method recovers $x^\star$ with accuracy \num{0.91} in \SI{9}{\milli\second}.
-\todo{Replace with real results.}
+As \cref{eq:argmin,eq:cases} and \cref{tab:results} show, the method recovers $x^\star$ with accuracy \num{0.91} in \SI{9}{\milli\second}.
+As \textcite{example2024} note, \enquote{further work is needed}.
+The speed of light is $c = \SI{3e8}{\metre\per\second}$.
